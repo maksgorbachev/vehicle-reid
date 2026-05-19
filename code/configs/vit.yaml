@@ -1,0 +1,60 @@
+# ViT (Vision Transformer) + BNNeck Configuration
+# ================================================
+# Конфигурация для GTX 1660 Super (6GB VRAM)
+
+model:
+  type: vit
+  size: small  # tiny, small, base
+  pretrained: true
+  embedding_dim: 384  # ViT-Small
+
+data:
+  dataset: VeRi-776
+  data_dir: ./data/VeRi-776
+  img_size: [224, 224]  # ViT требует квадратные изображения
+  num_workers: 4
+
+training:
+  epochs: 120
+  # Для 6GB VRAM: P=6, K=4 = 24 изображения (ViT тяжелее)
+  batch_size: 24
+  p: 6   # идентичностей в батче
+  k: 4   # изображений каждой идентичности
+
+  # ViT обычно лучше работает с меньшим LR
+  optimizer: adamw
+  lr: 0.0001
+  weight_decay: 0.01
+
+  scheduler: cosine
+  warmup_epochs: 10  # ViT нужен больший warmup
+
+  fp16: true
+
+loss:
+  ce_weight: 1.0
+  triplet_weight: 1.0
+  margin: 0.3
+  label_smooth: 0.1
+
+augmentation:
+  random_erasing_prob: 0.5
+  color_jitter: true
+  random_horizontal_flip: true
+  # Для ViT добавим RandAugment
+  rand_augment: true
+
+reranking:
+  enabled: true
+  k1: 20
+  k2: 6
+  lambda_value: 0.3
+
+evaluation:
+  eval_freq: 10
+  max_rank: 50
+  remove_same_camera: true
+
+output:
+  save_dir: ./checkpoints/vit
+  log_dir: ./logs/vit

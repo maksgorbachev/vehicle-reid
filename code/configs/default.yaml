@@ -1,0 +1,68 @@
+# Vehicle ReID Configuration
+# ==========================
+# Конфигурация для обучения и оценки модели реидентификации
+
+# Модель
+model:
+  backbone: resnet50
+  pretrained: true
+  last_stride: 1
+  embedding_dim: 2048
+
+# Данные
+data:
+  dataset: VeRi-776  # VeRi-776 или VehicleID
+  data_dir: ./data/VeRi-776
+  img_size: [256, 128]  # [height, width]
+  num_workers: 4
+
+# Обучение
+training:
+  epochs: 120
+  batch_size: 64
+  p: 16  # идентичностей в батче
+  k: 4   # изображений каждой идентичности
+
+  # Оптимизатор
+  optimizer: adam
+  lr: 0.00035
+  weight_decay: 0.0005
+
+  # Scheduler
+  scheduler: cosine
+  warmup_epochs: 5
+
+  # Mixed precision
+  fp16: true
+
+# Функции потерь
+loss:
+  ce_weight: 1.0
+  triplet_weight: 1.0
+  margin: 0.3
+  label_smooth: 0.1
+
+# Аугментации
+augmentation:
+  level: standard  # minimal, standard, strong
+  random_erasing_prob: 0.5
+  color_jitter: true
+  random_horizontal_flip: true
+
+# Re-ranking
+reranking:
+  enabled: true
+  k1: 20
+  k2: 6
+  lambda_value: 0.3
+
+# Оценка
+evaluation:
+  eval_freq: 10
+  max_rank: 50
+  remove_same_camera: true
+
+# Сохранение
+output:
+  save_dir: ./checkpoints
+  log_dir: ./logs

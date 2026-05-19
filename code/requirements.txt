@@ -1,0 +1,38 @@
+# Vehicle ReID Pipeline Requirements
+# ===================================
+
+# Deep Learning Framework
+torch>=1.10.0
+torchvision>=0.11.0
+timm>=0.9.0  # для ViT и других pretrained моделей
+
+# Data Processing
+numpy>=1.21.0
+Pillow>=8.0.0
+scikit-learn>=1.0.0
+
+# Visualization
+matplotlib>=3.5.0
+
+# Configuration
+PyYAML>=6.0
+
+# Progress bars
+tqdm>=4.62.0
+
+# Detection (YOLOv11)
+ultralytics>=8.0
+
+# Optional: for faster ANN search
+# faiss-cpu>=1.7.0  # or faiss-gpu for GPU
+
+# Optional: for UMAP visualization
+# umap-learn>=0.5.0
+
+# Optional: for better augmentations
+# albumentations>=1.1.0
+
+# Development
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=4.0.0

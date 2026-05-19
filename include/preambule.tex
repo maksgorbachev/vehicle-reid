@@ -1,0 +1,89 @@
+%%% --- Общие настройки документа ---
+\usepackage{geometry}
+\geometry{left=20mm,right=20mm,top=20mm,bottom=20mm} % поля
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  numbersep=5pt,
+  tabsize=2,
+  showstringspaces=false,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{orange},
+  columns=flexible
+}
+\usepackage{cmap}                     % поиск в PDF
+\usepackage[T2A]{fontenc}             % кодировка шрифтов
+\usepackage[utf8]{inputenc}           % кодировка исходного текста
+\usepackage[english, russian]{babel}  % локализация и переносы
+
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{
+    pdfstartview=FitH,
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+}
+
+%%% --- Математика ---
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{icomma}                   % умная запятая в числах
+\allowdisplaybreaks[4]                % перенос формул
+\binoppenalty=1000                    % уменьшение переносов в формулах
+
+%%% --- Символы и шрифты ---
+\usepackage{euscript}    % Евклид
+\usepackage{mathrsfs}    % Красивый матшрифт
+
+%%% --- Интервалы и абзацы ---
+% \sloppy                              % строго соблюдать границы текста (отключено)
+\setlength{\emergencystretch}{3em}   % предотвращает overfull hbox
+\linespread{1.2}                     % межстрочный интервал
+\setlength{\parskip}{0pt}            % интервал между абзацами
+\setlength{\parindent}{0pt}          % без красной строки
+
+%%% --- Работа с рисунками ---
+\usepackage{graphicx}
+\graphicspath{{images/}}
+\usepackage{wrapfig}
+\usepackage{caption}
+\captionsetup{justification=centering} % подписи по центру
+
+%%% --- Работа с таблицами ---
+\usepackage{array,tabularx,tabulary,booktabs,longtable,multirow}
+
+%%% --- Списки ---
+\usepackage{enumitem}
+\makeatletter
+\AddEnumerateCounter{\asbuk}{\russian@alph}{щ}
+\makeatother
+
+%%% --- TikZ и PGFPlots ---
+\usepackage{tikz,pgfplots}
+\usetikzlibrary{arrows,graphs,graphs.standard}
+\pgfplotsset{width=10cm,compat=newest}
+\pgfkeys{/pgf/trig format=rad}
+
+%%% --- Прочее ---
+\usepackage{float}    % [H] для фиксации положения
+\usepackage{gensymb}  % красивый знак градусов
+\usepackage[normalem]{ulem} % подчёркивания и зачёркивания
+
+%%% --- Колонтитулы ---
+\usepackage{titleps}
+\newpagestyle{main}{
+  \sethead{}{}{}
+  \setfoot{}{\thepage}{}
+}
+\pagestyle{main}
+
+%%% --- Оформление разделов ---
+\setcounter{secnumdepth}{0} % отключаем нумерацию секций

@@ -1,0 +1,249 @@
+
+% =========================
+%  Appendices - Vehicle ReID
+% =========================
+\appendix
+
+\section{Исходный код пайплайна}
+\label{app:code}
+Ключевые фрагменты кода из Jupyter notebooks обучения.
+
+\clearpage
+\subsection{Модель ResNet-50 + BNNeck}
+\begin{lstlisting}[language=Python, caption={BNNeck и ResNet-50}]
+class BNNeck(nn.Module):
+    def __init__(self, in_features, num_classes):
+        super().__init__()
+        self.bn = nn.BatchNorm1d(in_features)
+        self.bn.bias.requires_grad_(False)
+        self.classifier = nn.Linear(in_features, num_classes, bias=False)
+        nn.init.normal_(self.bn.weight, 1.0, 0.02)
+        nn.init.normal_(self.classifier.weight, std=0.001)
+
+    def forward(self, x):
+        bn_x = self.bn(x)
+        logits = self.classifier(bn_x)
+        return bn_x, logits
+
+class ResNet50ReID(nn.Module):
+    def __init__(self, num_classes, pretrained=True):
+        super().__init__()
+        resnet = models.resnet50(
+            weights='IMAGENET1K_V1' if pretrained else None)
+        resnet.layer4[0].downsample[0].stride = (1, 1)
+        resnet.layer4[0].conv2.stride = (1, 1)
+        self.backbone = nn.Sequential(
+            resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
+            resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+        self.bnneck = BNNeck(2048, num_classes)
+
+    def forward(self, x):
+        feat_map = self.backbone(x)
+        features = self.gap(feat_map).flatten(1)
+        bn_features, logits = self.bnneck(features)
+        if self.training:
+            return features, bn_features, logits
+        return F.normalize(bn_features, p=2, dim=1)
+\end{lstlisting}
+
+\clearpage
+\subsection{Модель ViT-Small + BNNeck}
+\begin{lstlisting}[language=Python, caption={ViT-Small с timm}]
+import timm
+
+class ViTReID(nn.Module):
+    def __init__(self, num_classes, model_size='small', pretrained=True):
+        super().__init__()
+        model_names = {
+            'tiny': 'vit_tiny_patch16_224',
+            'small': 'vit_small_patch16_224',
+            'base': 'vit_base_patch16_224'}
+        self.backbone = timm.create_model(
+            model_names[model_size], pretrained=pretrained, num_classes=0)
+        self.embed_dim = self.backbone.embed_dim
+        self.bnneck = BNNeck(self.embed_dim, num_classes)
+
+    def forward(self, x):
+        features = self.backbone(x)
+        bn_features, logits = self.bnneck(features)
+        if self.training:
+            return features, bn_features, logits
+        return F.normalize(bn_features, p=2, dim=1)
+\end{lstlisting}
+
+\clearpage
+\subsection{Функции потерь}
+\begin{lstlisting}[language=Python, caption={Cross-Entropy и Triplet Loss}]
+class CrossEntropyLabelSmooth(nn.Module):
+    def __init__(self, num_classes, epsilon=0.1):
+        super().__init__()
+        self.num_classes = num_classes
+        self.epsilon = epsilon
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, inputs, targets):
+        log_probs = self.logsoftmax(inputs)
+        targets_one_hot = torch.zeros_like(log_probs).scatter_(
+            1, targets.unsqueeze(1), 1)
+        targets_smooth = ((1 - self.epsilon) * targets_one_hot
+            + self.epsilon / self.num_classes)
+        loss = (-targets_smooth * log_probs).sum(dim=1).mean()
+        return loss
+
+class TripletLoss(nn.Module):
+    def __init__(self, margin=0.3):
+        super().__init__()
+        self.margin = margin
+
+    def forward(self, features, labels):
+        dist_mat = torch.cdist(features, features, p=2)
+        mask_pos = labels.unsqueeze(0) == labels.unsqueeze(1)
+        mask_neg = ~mask_pos
+        dist_pos = dist_mat.clone()
+        dist_pos[~mask_pos] = 0
+        hard_pos = dist_pos.max(dim=1)[0]
+        dist_neg = dist_mat.clone()
+        dist_neg[~mask_neg] = float('inf')
+        hard_neg = dist_neg.min(dim=1)[0]
+        loss = F.relu(hard_pos - hard_neg + self.margin).mean()
+        return loss
+\end{lstlisting}
+
+\clearpage
+\subsection{PK-семплер}
+\begin{lstlisting}[language=Python, caption={PK-Sampler для батчевого семплинга}]
+class PKSampler:
+    def __init__(self, dataset, p, k):
+        self.p, self.k = p, k
+        self.idx_to_samples = dataset.idx_to_samples
+        self.labels = list(self.idx_to_samples.keys())
+
+    def __iter__(self):
+        random.shuffle(self.labels)
+        batch = []
+        for label in self.labels:
+            indices = self.idx_to_samples[label]
+            if len(indices) >= self.k:
+                selected = random.sample(indices, self.k)
+            else:
+                selected = random.choices(indices, k=self.k)
+            batch.extend(selected)
+            if len(batch) >= self.p * self.k:
+                yield batch[:self.p * self.k]
+                batch = batch[self.p * self.k:]
+
+    def __len__(self):
+        return len(self.labels) // self.p
+\end{lstlisting}
+
+\clearpage
+\subsection{Датасет VeRi-776}
+\begin{lstlisting}[language=Python, caption={Загрузчик датасета}]
+class VeRiDataset(Dataset):
+    def __init__(self, data_dir, split='train', transform=None):
+        self.data_dir = data_dir
+        self.transform = transform
+        if split == 'train':
+            self.img_dir = os.path.join(data_dir, 'image_train')
+        elif split == 'query':
+            self.img_dir = os.path.join(data_dir, 'image_query')
+        else:
+            self.img_dir = os.path.join(data_dir, 'image_test')
+
+        self.samples = []
+        self.label_to_idx = {}
+        self.idx_to_samples = defaultdict(list)
+
+        filenames = [f for f in os.listdir(self.img_dir)
+                     if f.endswith('.jpg')]
+        for fname in filenames:
+            parts = fname.split('_')
+            vid = int(parts[0])
+            cam = int(parts[1][1:]) if parts[1].startswith('c') else 0
+            if vid not in self.label_to_idx:
+                self.label_to_idx[vid] = len(self.label_to_idx)
+            label = self.label_to_idx[vid]
+            self.samples.append((fname, label, cam))
+            self.idx_to_samples[label].append(len(self.samples) - 1)
+        self.num_classes = len(self.label_to_idx)
+
+    def __getitem__(self, idx):
+        fname, label, cam = self.samples[idx]
+        img = Image.open(os.path.join(self.img_dir, fname)).convert('RGB')
+        if self.transform:
+            img = self.transform(img)
+        return {'image': img, 'label': label, 'camera_id': cam}
+\end{lstlisting}
+
+\clearpage
+\subsection{Функции оценки}
+\begin{lstlisting}[language=Python, caption={Вычисление метрик CMC и mAP}]
+def compute_metrics(query_feats, gallery_feats,
+                    query_labels, gallery_labels,
+                    query_cams, gallery_cams):
+    dist_mat = 1 - np.dot(query_feats, gallery_feats.T)
+    num_query = len(query_labels)
+    all_AP, all_cmc = [], np.zeros(50)
+
+    for i in range(num_query):
+        q_label, q_cam = query_labels[i], query_cams[i]
+        valid_mask = ~((gallery_labels == q_label) &
+                       (gallery_cams == q_cam))
+        if valid_mask.sum() == 0:
+            continue
+        distances = dist_mat[i][valid_mask]
+        g_labels = gallery_labels[valid_mask]
+        indices = np.argsort(distances)
+        matches = (g_labels[indices] == q_label).astype(np.int32)
+        cmc = matches.cumsum()
+        cmc[cmc > 1] = 1
+        all_cmc[:len(cmc)] += cmc[:50]
+        num_rel = matches.sum()
+        if num_rel > 0:
+            precision = matches.cumsum() / (np.arange(len(matches)) + 1)
+            all_AP.append((precision * matches).sum() / num_rel)
+
+    cmc = all_cmc / num_query * 100
+    return {
+        'Rank-1': cmc[0], 'Rank-5': cmc[4],
+        'Rank-10': cmc[9], 'mAP': np.mean(all_AP) * 100}
+\end{lstlisting}
+
+\textbf{Примечание о junk-изображениях.} Протокол VeRi-776 определяет как «junk» все gallery-изображения той же камеры, что и запрос (файл \texttt{jk\_image.txt}). В приведённом листинге \texttt{valid\_mask} исключает из ранжирования изображения с \emph{совпадающим ID и той же камерой} (прямые дубли запроса). Изображения других транспортных средств той же камеры остаются в галерее как дополнительные негативные примеры (дистракторы), что делает оценку строже, а не мягче: модели сложнее найти правильный ответ в присутствии камерно-схожих негативов. В производственном коде (\texttt{vehicle\_reid/evaluation.py}) используется аналогичная логика исключения same-camera same-ID изображений.
+
+\section{Структура проекта}
+\label{app:structure}
+
+\begin{verbatim}
+code/
++-- train_resnet50.ipynb   # Jupyter notebook ResNet-50
++-- train_vit.ipynb        # Jupyter notebook ViT-Small
++-- comparison.ipynb       # Сравнение моделей
++-- vehicle_reid/
+|   +-- model.py           # ResNet-50 + BNNeck
+|   +-- vit_model.py       # ViT-Small + BNNeck
+|   +-- losses.py          # CE + Triplet Loss
+|   +-- dataset.py         # VeRi-776 loader
+|   +-- transforms.py      # Augmentations
+|   +-- reranking.py       # K-reciprocal re-ranking
+|   +-- evaluation.py      # CMC/mAP metrics
++-- configs/
+|   +-- resnet50.yaml
+|   +-- vit.yaml
++-- requirements.txt
+
+images/
++-- comparison_metrics.png
++-- training_curves_comparison.png
+\end{verbatim}
+
+\section{Воспроизводимость}
+\label{app:repro}
+\begin{itemize}
+  \item \textbf{Random seed}: 42 (NumPy, PyTorch)
+  \item \textbf{Версии}: PyTorch 2.0, torchvision 0.15, timm 1.0
+  \item \textbf{Hardware}: Google Colab T4 GPU (16GB VRAM)
+  \item \textbf{Датасет}: VeRi-776 (Kaggle)
+\end{itemize}
+

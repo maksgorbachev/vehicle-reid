@@ -1,0 +1,40 @@
+\documentclass[a4paper, 14pt]{extreport}
+
+%% подключаем стандарт библиографии
+\bibliographystyle{gost71u} 
+
+%% for envirovemt "abstract" in class book
+% \newenvironment{abstract}{}{}
+% \usepackage{abstract}
+
+%% подключаем преамбулу, в ней содержатся подключение всех необходимых пакетов
+\input{include/preambule.tex}
+
+\begin{document}
+    %% титульник
+    \input{include/title.tex}
+    % аннотоция
+    \input{parts/Annotation.tex}
+    % содержание
+    \newpage
+    {\normalsize{\tableofcontents{}}}
+    \newpage
+
+    % введение
+    \input{parts/intro.tex}
+    
+
+    \input{parts/Chapter0.tex} %% Теоретические основы
+    \input{parts/Chapter1.tex} %% Постановка задачи
+    \input{parts/Chapter2.tex} %% Используемые модели и методы
+    \input{parts/Chapter3.tex} %% Эксперименты и результаты
+    \input{parts/Chapter4.tex} %% Заключение
+
+    %% Don't change the following lines
+    \nocite{*}
+    \bibliography{references}
+    \addcontentsline{toc}{section}{\textbf{Список источников}}
+
+    \input{parts/appendices}
+    
+\end{document}
